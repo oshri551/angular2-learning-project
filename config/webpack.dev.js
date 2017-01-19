@@ -5,6 +5,12 @@
 const helpers = require('./helpers');
 const webpackMerge = require('webpack-merge'); // used to merge webpack configs
 const commonConfig = require('./webpack.common.js'); // the settings that are common to prod and dev
+const Agent = require('agentkeepalive');
+const httpProxy = require('http-proxy');
+
+//Running the proxy before webpack dev server proxy
+var proxyServer = require('./http-proxy');
+proxyServer.runProxyServer(Agent, httpProxy);
 
 /**
  * Webpack Plugins
@@ -18,7 +24,7 @@ const LoaderOptionsPlugin = require('webpack/lib/LoaderOptionsPlugin');
  */
 const ENV = process.env.ENV = process.env.NODE_ENV = 'development';
 const HOST = process.env.HOST || 'localhost';
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 const HMR = helpers.hasProcessFlag('hot');
 const METADATA = webpackMerge(commonConfig({env: ENV}).metadata, {
   host: HOST,
@@ -143,6 +149,24 @@ module.exports = function (options) {
       watchOptions: {
         aggregateTimeout: 300,
         poll: 1000
+      },
+      proxy: {
+        '/api': {
+          target: 'http://localhost:4000',
+          logLevel: 'debug',
+          agent: new Agent({
+            maxSockets: 100,
+            keepAlive: true,
+            maxFreeSockets: 10,
+            keepAliveMsecs:1000,
+            timeout: 60000,
+            keepAliveTimeout: 90000 // free socket keepalive for 90 seconds
+          }),
+          onProxyRes: proxyRes => {
+            var key = 'www-authenticate';
+            proxyRes.headers[key] = proxyRes.headers[key] && proxyRes.headers[key].split(',');
+          }
+        }
       }
     },
 
